@@ -1,0 +1,9 @@
+{
+    "name": "simone-bianco/laravel-activity-matrix",
+    "description": "Scoped append-only activity feeds with bounded details and cursor pagination.",
+    "type": "library",
+    "license": "MIT",
+    "require": {"php": "^8.4", "illuminate/database": "^13.0", "illuminate/support": "^13.0", "illuminate/bus": "^13.0", "illuminate/queue": "^13.0"},
+    "autoload": {"psr-4": {"SimoneBianco\\ActivityMatrix\\": "src/"}},
+    "extra": {"laravel": {"providers": ["SimoneBianco\\ActivityMatrix\\ActivityMatrixServiceProvider"]}}
+}
