@@ -10,12 +10,12 @@ final class ActivitySanitizer
 
     private const int JSON_FLAGS = JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
-    public function details(array $value): array
+    public function details(array $value, int $maxBytes = 16384, int $maxStringLength = 512, int $maxDepth = 5, array $visiblePaths = []): array
     {
         // Reserve the root truncation marker; account for escaped JSON bytes, including keys and containers.
-        $budget = 16384 - 32;
+        $budget = $maxBytes - 32;
         $truncated = false;
-        $result = $this->walk($value, $budget, $truncated);
+        $result = $this->walk($value, $budget, $truncated, 0, $maxStringLength, $maxDepth, $visiblePaths, []);
         if ($truncated) {
             $result['_truncated'] = true;
         }
@@ -50,11 +50,11 @@ REGEX;
         return $value;
     }
 
-    private function walk(array $values, int &$budget, bool &$truncated, int $depth = 0): array
+    private function walk(array $values, int &$budget, bool &$truncated, int $depth, int $maxStringLength, int $maxDepth, array $visiblePaths, array $parentPath): array
     {
         $result = [];
         $budget -= 2;
-        if ($depth > 5) {
+        if ($depth > $maxDepth) {
             $truncated = true;
 
             return $result;
@@ -78,7 +78,9 @@ REGEX;
                 continue;
             }
             $keyCost = strlen(json_encode((string) $key, self::JSON_FLAGS)) + 2;
-            if (preg_match(self::SENSITIVE_KEY, rawurldecode((string) $originalKey))) {
+            $path = [...$parentPath, is_int($originalKey) ? '*' : $originalKey];
+            // Explicit domain paths bypass this key's mask; child keys and embedded credentials still redact.
+            if (! in_array($path, $visiblePaths, true) && preg_match(self::SENSITIVE_KEY, rawurldecode((string) $originalKey))) {
                 $safe = '[redacted]';
             } elseif (is_array($value)) {
                 if ($budget < $keyCost + 2) {
@@ -86,12 +88,12 @@ REGEX;
                     break;
                 }
                 $budget -= $keyCost;
-                $result[$key] = $this->walk($value, $budget, $truncated, $depth + 1);
+                $result[$key] = $this->walk($value, $budget, $truncated, $depth + 1, $maxStringLength, $maxDepth, $visiblePaths, $path);
 
                 continue;
             } elseif (is_string($value)) {
-                $truncated = $truncated || mb_strlen($value, 'UTF-8') > 512;
-                $safe = $this->text($value, 512);
+                $truncated = $truncated || mb_strlen($value, 'UTF-8') > $maxStringLength;
+                $safe = $this->text($value, $maxStringLength);
             } elseif (is_scalar($value) || $value === null) {
                 $safe = $value;
                 if (is_float($safe) && ! is_finite($safe)) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SimoneBianco\ActivityMatrix;
 
+use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use SimoneBianco\ActivityMatrix\Data\ActivityItemData;
 use SimoneBianco\ActivityMatrix\Models\ActivityEntry;
@@ -12,11 +13,36 @@ final class ActivityQuery
 {
     public function feed(string $scope, array $filters = []): array
     {
+        return $this->feedQuery(ActivityEntry::query()->where('scope', $scope), $filters);
+    }
+
+    public function feedScopePrefix(string $scopePrefix, array $filters = []): array
+    {
+        return $this->feedQuery($this->scopePrefixQuery($scopePrefix), $filters);
+    }
+
+    public function feedLatestCorrelatedScopePrefix(string $scopePrefix, array $filters = []): array
+    {
+        return $this->feedQuery($this->latestCorrelatedScopePrefixQuery($scopePrefix), $filters);
+    }
+
+    public function detail(string $scope, string $id): ActivityEntry
+    {
+        return ActivityEntry::query()->where('scope', $scope)->findOrFail($id);
+    }
+
+    public function detailScopePrefix(string $scopePrefix, string $id): ActivityEntry
+    {
+        return $this->scopePrefixQuery($scopePrefix)->findOrFail($id);
+    }
+
+    /** @param Builder<ActivityEntry> $query */
+    private function feedQuery(Builder $query, array $filters): array
+    {
         $limit = max(1, min(500, (int) ($filters['limit'] ?? 240)));
         if (isset($filters['before'], $filters['after'])) {
             throw new InvalidArgumentException('Use only one cursor direction.');
         }
-        $query = ActivityEntry::query()->where('scope', $scope);
         foreach (['agent' => 'actor_id', 'operation' => 'operation'] as $filter => $column) {
             if (isset($filters[$filter])) {
                 $query->where($column, $filters[$filter]);
@@ -50,8 +76,30 @@ final class ActivityQuery
         ];
     }
 
-    public function detail(string $scope, string $id): ActivityEntry
+    /** @return Builder<ActivityEntry> */
+    private function latestCorrelatedScopePrefixQuery(string $scopePrefix): Builder
     {
-        return ActivityEntry::query()->where('scope', $scope)->findOrFail($id);
+        $query = $this->scopePrefixQuery($scopePrefix);
+        $table = (new ActivityEntry)->getTable();
+
+        return $query->where(function (Builder $query) use ($scopePrefix, $table): void {
+            $query->whereNull('correlation_id')->orWhereIn('id', function ($latest) use ($scopePrefix, $table): void {
+                $latest->from($table)
+                    ->selectRaw('MAX(id)')
+                    ->where('scope', 'like', $scopePrefix.'%')
+                    ->whereNotNull('correlation_id')
+                    ->groupBy('scope', 'category', 'operation', 'correlation_id');
+            });
+        });
+    }
+
+    /** @return Builder<ActivityEntry> */
+    private function scopePrefixQuery(string $scopePrefix): Builder
+    {
+        if ($scopePrefix === '' || strlen($scopePrefix) > 100 || strpbrk($scopePrefix, '%_\\') !== false) {
+            throw new InvalidArgumentException('Scope prefix must be a literal non-empty prefix without SQL wildcard characters.');
+        }
+
+        return ActivityEntry::query()->where('scope', 'like', $scopePrefix.'%');
     }
 }
