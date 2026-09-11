@@ -48,6 +48,23 @@ final class ActivityQuery
                 $query->where($column, $filters[$filter]);
             }
         }
+        foreach (['agent_include' => 'actor_id', 'operation_include' => 'operation'] as $filter => $column) {
+            if (! empty($filters[$filter])) {
+                $query->whereIn($column, $filters[$filter]);
+            }
+        }
+        if (! empty($filters['agent_exclude'])) {
+            $agentExclude = $filters['agent_exclude'];
+            $query->where(static function (Builder $query) use ($agentExclude): void {
+                $query->whereNull('actor_id')->orWhereNotIn('actor_id', $agentExclude);
+            });
+        }
+        if (! empty($filters['operation_exclude'])) {
+            $query->whereNotIn('operation', $filters['operation_exclude']);
+        }
+        if (! empty($filters['status_exclude'])) {
+            $query->whereNotIn('status', $filters['status_exclude']);
+        }
         foreach (['from' => '>=', 'to' => '<='] as $filter => $operator) {
             if (isset($filters[$filter])) {
                 $query->where('occurred_at', $operator, $filters[$filter]);
