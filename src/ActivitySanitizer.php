@@ -10,12 +10,12 @@ final class ActivitySanitizer
 
     private const int JSON_FLAGS = JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
-    public function details(array $value, int $maxBytes = 16384, int $maxStringLength = 512, int $maxDepth = 5, array $visiblePaths = []): array
+    public function details(array $value, int $maxBytes = 16384, int $maxStringLength = 512, int $maxDepth = 5, array $visiblePaths = [], int $maxItems = 100): array
     {
         // Reserve the root truncation marker; account for escaped JSON bytes, including keys and containers.
         $budget = $maxBytes - 32;
         $truncated = false;
-        $result = $this->walk($value, $budget, $truncated, 0, $maxStringLength, $maxDepth, $visiblePaths, []);
+        $result = $this->walk($value, $budget, $truncated, 0, $maxStringLength, $maxDepth, $visiblePaths, [], $maxItems);
         if ($truncated) {
             $result['_truncated'] = true;
         }
@@ -50,7 +50,7 @@ REGEX;
         return $value;
     }
 
-    private function walk(array $values, int &$budget, bool &$truncated, int $depth, int $maxStringLength, int $maxDepth, array $visiblePaths, array $parentPath): array
+    private function walk(array $values, int &$budget, bool &$truncated, int $depth, int $maxStringLength, int $maxDepth, array $visiblePaths, array $parentPath, int $maxItems): array
     {
         $result = [];
         $budget -= 2;
@@ -66,7 +66,7 @@ REGEX;
 
                 continue;
             }
-            if (++$count > 100) {
+            if (++$count > $maxItems) {
                 $truncated = true;
                 break;
             }
@@ -88,7 +88,7 @@ REGEX;
                     break;
                 }
                 $budget -= $keyCost;
-                $result[$key] = $this->walk($value, $budget, $truncated, $depth + 1, $maxStringLength, $maxDepth, $visiblePaths, $path);
+                $result[$key] = $this->walk($value, $budget, $truncated, $depth + 1, $maxStringLength, $maxDepth, $visiblePaths, $path, $maxItems);
 
                 continue;
             } elseif (is_string($value)) {

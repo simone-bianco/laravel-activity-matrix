@@ -1,6 +1,6 @@
 # Laravel Activity Matrix
 
-`ActivitySanitizer::details` accepts server-owned `maxBytes`, `maxStringLength` and `maxDepth` for authorized lazy source-detail projections. Defaults remain16384 bytes,512 characters and depth5 for recording/jobs. A host may use a larger bounded display budget without weakening redaction or copying payloads into activity entries. These parameters must never come from request input.
+`ActivitySanitizer::details` accepts server-owned `maxBytes`, `maxStringLength`, `maxDepth` and `maxItems` (per array) for authorized lazy source-detail projections. Defaults remain16384 bytes,512 characters, depth5 and100 items per array for recording/jobs. A host may use a larger bounded display budget without weakening redaction or copying payloads into activity entries. These parameters must never come from request input.
 
 Generic queued append-only activity projection, bounded details, JSON DTOs and keyset queries. Laravel 13 / PHP 8.4. No application classes, auth rules, routes or frontend dependencies.
 
