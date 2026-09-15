@@ -36,8 +36,12 @@ final class ActivityQuery
         return $this->scopePrefixQuery($scopePrefix)->findOrFail($id);
     }
 
-    /** @param Builder<ActivityEntry> $query */
-    private function feedQuery(Builder $query, array $filters): array
+    /**
+     * Paginate a host-authorized query, including its domain-specific membership constraints.
+     *
+     * @param  Builder<ActivityEntry>  $query
+     */
+    public function feedQuery(Builder $query, array $filters): array
     {
         $limit = max(1, min(500, (int) ($filters['limit'] ?? 240)));
         if (isset($filters['before'], $filters['after'])) {
